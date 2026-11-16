@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>買い物・在庫メモ</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", Meiryo, system-ui, sans-serif;
+    background: linear-gradient(160deg, #e8f5e9, #f6f8f6 40%, #eef2f7);
+    min-height: 100vh;
+    color: #1f2937;
+    padding: 24px 12px 48px;
+  }
+
+  .app { max-width: 600px; margin: 0 auto; }
+
+  header h1 { font-size: 1.5rem; letter-spacing: .02em; }
+  .subtitle { color: #6b7280; font-size: .85rem; margin-top: 4px; }
+
+  .tabs {
+    display: flex; gap: 6px;
+    background: #dfe7df;
+    padding: 6px; border-radius: 12px;
+    margin: 16px 0;
+  }
+  .tab {
+    flex: 1; border: none; background: transparent;
+    padding: 10px 8px; border-radius: 9px;
+    font-size: .95rem; font-weight: 600; color: #4b5563;
+    cursor: pointer; font-family: inherit;
+  }
+  .tab.active { background: #fff; color: #2b8a3e; box-shadow: 0 2px 8px rgba(15, 60, 30, .12); }
+  .count {
+    display: inline-block; min-width: 1.5em;
+    background: #d3f9d8; color: #2b8a3e;
+    border-radius: 999px; padding: 0 7px;
+    font-size: .8em; margin-left: 2px;
+  }
+
+  .panel {
+    background: #fff; border-radius: 16px;
+    box-shadow: 0 6px 24px rgba(15, 60, 30, .08);
+    padding: 16px;
+  }
+  .hidden { display: none; }
+
+  .add-form { display: flex; flex-direction: column; gap: 8px; }
+  .form-row { display: flex; gap: 8px; align-items: stretch; }
+  .form-row input, .form-row select {
+    padding: 10px 12px;
+    border: 1.5px solid #d7ddd7; border-radius: 10px;
+    font-size: 1rem; font-family: inherit;
+    background: #fff; color: #1f2937;
+    min-width: 0;
+  }
+  .form-row input[type="text"] { flex: 1 1 auto; }
+  .form-row input[type="number"] { width: 64px; flex: 0 0 auto; }
+  .form-row select { flex: 0 1 auto; max-width: 150px; }
+  .form-row input:focus, .form-row select:focus {
+    outline: none; border-color: #2f9e44;
+    box-shadow: 0 0 0 3px rgba(47, 158, 68, .15);
+  }
+  #shop-sale-price { flex: 1 1 70px; width: auto; }
+  #pantry-price { flex: 1 1 auto; width: auto; }
+  .form-row .btn-primary { margin-left: auto; flex: 0 0 auto; }
+  .form-row .sale-toggle, .form-row .nostock-toggle { flex: 0 0 auto; }
+
+  .sale-toggle, .nostock-toggle {
+    display: flex; align-items: center; gap: 5px;
+    font-size: .85rem; font-weight: 700;
+    padding: 8px 10px; border-radius: 10px;
+    cursor: pointer; white-space: nowrap; user-select: none;
+  }
+  .sale-toggle { color: #c2410c; background: #fff7ed; border: 1.5px solid #fdba74; }
+  .sale-toggle input { width: 16px; height: 16px; accent-color: #ea580c; cursor: pointer; }
+  .sale-toggle:has(input:checked) { background: #ffedd5; border-color: #ea580c; }
+  .nostock-toggle { color: #3730a3; background: #eef2ff; border: 1.5px solid #a5b4fc; }
+  .nostock-toggle input { width: 16px; height: 16px; accent-color: #4f46e5; cursor: pointer; }
+  .nostock-toggle:has(input:checked) { background: #e0e7ff; border-color: #4f46e5; }
+
+  .btn-primary {
+    background: #2f9e44; color: #fff; border: none;
+    border-radius: 10px; padding: 10px 18px;
+    font-size: .95rem; font-weight: 700; cursor: pointer;
+    font-family: inherit; white-space: nowrap;
+  }
+  .btn-primary:hover { background: #2b8a3e; }
+
+  .list { margin-top: 12px; }
+  .group-header {
+    font-size: .8rem; font-weight: 700; color: #6b7280;
+    margin: 14px 0 6px; padding-left: 4px;
+  }
+  .empty { padding: 28px 12px; text-align: center; color: #9ca3af; font-size: .95rem; }
+
+  .item {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 10px; padding: 10px;
+    background: #fff;
+    border: 1px solid #e6ebe6; border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(15, 60, 30, .06);
+    margin-bottom: 8px;
+  }
+  .item.sale { background: #fff7ed; border-color: #fed7aa; }
+  .item.nostock:not(.sale) { background: #f8fafc; border-color: #e2e8f0; }
+  .item.out { background: #fff9f9; border-color: #fecaca; }
+  .check { width: 20px; height: 20px; accent-color: #2f9e44; cursor: pointer; flex-shrink: 0; }
+  .item-main { flex: 1 1 100px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .item-name { font-weight: 600; word-break: break-word; }
+  .item.done .item-name { text-decoration: line-through; color: #9ca3af; }
+  .chip {
+    font-size: .72rem; background: #f1f4f1; color: #5f6b5f;
+    padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  }
+  .badge {
+    font-size: .7rem; background: #ffe3e3; color: #c92a2a;
+    padding: 2px 8px; border-radius: 999px; font-weight: 700; white-space: nowrap;
+  }
+  .badge-sale {
+    font-size: .7rem; background: #ffedd5; color: #c2410c;
+    padding: 2px 8px; border-radius: 999px; font-weight: 700; white-space: nowrap;
+  }
+  .badge-nostock {
+    font-size: .7rem; background: #e5e7eb; color: #4b5563;
+    padding: 2px 8px; border-radius: 999px; font-weight: 700; white-space: nowrap;
+  }
+  .price-line { width: 100%; display: flex; gap: 8px; align-items: baseline; }
+  .price-sale { color: #c2410c; font-weight: 700; font-size: .85rem; }
+  .price-usual { color: #9ca3af; font-size: .75rem; }
+
+  .icon-btn {
+    border: none; background: transparent; color: #b0b7b0;
+    font-size: 1rem; cursor: pointer; padding: 4px 8px; border-radius: 8px;
+  }
+  .icon-btn:hover { color: #e03131; background: #fff0f0; }
+
+  .stepper { display: flex; align-items: center; gap: 6px; }
+  .stepper button {
+    width: 28px; height: 28px; border-radius: 8px;
+    border: 1.5px solid #d7ddd7; background: #fff;
+    cursor: pointer; font-weight: 700; color: #374151; font-size: .95rem;
+  }
+  .stepper button:hover { border-color: #2f9e44; color: #2b8a3e; }
+  .stepper .num { min-width: 2ch; text-align: center; font-weight: 700; }
+
+  .mover { display: flex; flex-direction: column; gap: 2px; }
+  .mover button {
+    width: 26px; height: 20px; border-radius: 6px;
+    border: 1.5px solid #d7ddd7; background: #fff;
+    color: #374151; font-size: .65rem; line-height: 1;
+    cursor: pointer; padding: 0;
+  }
+  .mover button:hover:not(:disabled) { border-color: #2f9e44; color: #2b8a3e; }
+  .mover button:disabled { opacity: .35; cursor: default; }
+
+  .price-input {
+    width: 100px; padding: 6px 8px;
+    border: 1.5px solid #e5e7eb; border-radius: 8px;
+    font-size: .8rem; color: #374151; font-family: inherit;
+  }
+  .price-input:focus { outline: none; border-color: #2f9e44; }
+
+  .btn-small {
+    border: 1.5px solid #2f9e44; color: #2b8a3e; background: #fff;
+    border-radius: 8px; padding: 4px 10px;
+    font-size: .78rem; font-weight: 700; cursor: pointer;
+    font-family: inherit; white-space: nowrap;
+  }
+  .btn-small:hover { background: #ebfbee; }
+
+  .panel-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; margin-top: 12px; flex-wrap: wrap;
+  }
+  .muted { color: #6b7280; font-size: .85rem; }
+  .btn-secondary {
+    background: #ebfbee; color: #2b8a3e; border: none;
+    padding: 9px 14px; border-radius: 10px;
+    font-weight: 700; cursor: pointer; font-family: inherit; font-size: .88rem;
+  }
+  .btn-secondary:hover:not(:disabled) { background: #d3f9d8; }
+  .btn-secondary:disabled { opacity: .45; cursor: default; }
+
+  .hint { font-size: .78rem; color: #9ca3af; margin-top: 10px; }
+  .app-footer { text-align: center; font-size: .75rem; color: #9ca3af; margin-top: 18px; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 24px;
+    transform: translateX(-50%) translateY(8px);
+    background: #1f2937; color: #fff;
+    padding: 10px 18px; border-radius: 999px;
+    font-size: .85rem; opacity: 0; pointer-events: none;
+    transition: opacity .25s, transform .25s;
+    max-width: 90vw; text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🛒 買い物・在庫メモ</h1>
+    <p class="subtitle">スーパーでの買い物と、家の在庫をまとめて管理</p>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="shop">🛒 買い物リスト <span class="count" id="shop-count">0</span></button>
+    <button class="tab" data-tab="pantry">📦 在庫 <span class="count" id="pantry-count">0</span></button>
+  </nav>
+
+  <section id="panel-shop" class="panel">
+    <form id="shop-form" class="add-form">
+      <div class="form-row">
+        <input id="shop-name" type="text" placeholder="例: 牛乳" required maxlength="40" autocomplete="off">
+        <input id="shop-qty" type="number" min="1" max="99" value="1" title="数量">
+        <select id="shop-category" title="カテゴリ"></select>
+      </div>
+      <div class="form-row">
+        <label class="sale-toggle"><input id="shop-sale" type="checkbox">特売</label>
+        <input id="shop-sale-price" type="number" min="1" max="99999" placeholder="特売価格" title="特売価格(円)" hidden>
+        <label class="nostock-toggle"><input id="shop-nostock" type="checkbox">非保存</label>
+        <button type="submit" class="btn-primary">追加</button>
+      </div>
+    </form>
+    <div id="shop-list" class="list"></div>
+    <div class="panel-footer">
+      <span id="shop-remaining" class="muted"></span>
+      <button id="move-done" class="btn-secondary" disabled>在庫に反映</button>
+    </div>
+    <p class="hint">チェックは「カートに入れた」印。↑↓で並べ替え。買い物後に「在庫に反映」で確定。「非保存」=在庫に入れない(反映時にリストから消える)。</p>
+  </section>
+
+  <section id="panel-pantry" class="panel hidden">
+    <form id="pantry-form" class="add-form">
+      <div class="form-row">
+        <input id="pantry-name" type="text" placeholder="例: 卵" required maxlength="40" autocomplete="off">
+        <input id="pantry-qty" type="number" min="1" max="99" value="1" title="数量">
+        <select id="pantry-category" title="カテゴリ"></select>
+      </div>
+      <div class="form-row">
+        <input id="pantry-price" type="number" min="1" max="99999" placeholder="通常価格" title="通常価格(任意・円)">
+        <button type="submit" class="btn-primary">追加</button>
+      </div>
+    </form>
+    <div id="pantry-list" class="list"></div>
+    <p class="hint">よく買うものだけ登録します。通常価格は特売との比較に使われます。0になると「在庫切れ」表示。</p>
+  </section>
+
+  <footer class="app-footer">データはこのブラウザに自動保存されます(localStorage)</footer>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+'use strict';
+
+const CATEGORIES = [
+  { id: 'produce',   label: '青果',     icon: '🥬' },
+  { id: 'fish',      label: '魚',       icon: '🐟' },
+  { id: 'meat',      label: '肉',       icon: '🍖' },
+  { id: 'dairy',     label: '乳製品',   icon: '🥛' },
+  { id: 'eggs',      label: '卵',       icon: '🥚' },
+  { id: 'processed', label: '加工食品', icon: '🍱' },
+  { id: 'other',     label: 'その他',   icon: '📦' }
+];
+const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+const CAT_RANK = Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i]));
+const STORAGE_KEY = 'shopping-pantry-memo-v3';
+const OLD_KEY = 'shopping-pantry-memo-v2';
+const OLD_CAT_MAP = {
+  produce: 'produce', fish: 'fish', meat: 'meat', dairy: 'dairy', eggs: 'eggs',
+  dry: 'processed', frozen: 'processed', other: 'other', rare: 'other'
+};
+
+let state = load();
+
+function validState(s) {
+  return s && Array.isArray(s.shopping) && Array.isArray(s.pantry);
+}
+
+function migrate(old) {
+  const mapCat = c => OLD_CAT_MAP[c] || 'other';
+  return {
+    shopping: old.shopping.map(i => ({
+      id: i.id, name: i.name, category: mapCat(i.category), qty: i.qty,
+      done: !!i.done, sale: !!i.sale,
+      salePrice: i.salePrice != null ? i.salePrice : null,
+      pantryId: i.pantryId || null,
+      noStock: i.category === 'rare'
+    })),
+    pantry: old.pantry.map(i => ({
+      id: i.id, name: i.name, category: mapCat(i.category), qty: i.qty,
+      usualPrice: i.usualPrice != null ? i.usualPrice : null
+    }))
+  };
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (validState(s)) return s;
+    }
+    const oldRaw = localStorage.getItem(OLD_KEY);
+    if (oldRaw) {
+      const old = JSON.parse(oldRaw);
+      if (validState(old)) {
+        const migrated = migrate(old);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+    }
+  } catch (e) { /* 壊れたデータは初期化 */ }
+  return { shopping: [], pantry: [] };
+}
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* 保存不可でも動作継続 */ }
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function clampQty(n) {
+  return Math.max(1, Math.min(99, n));
+}
+
+function fmtYen(n) {
+  return n.toLocaleString('ja-JP') + '円';
+}
+
+const $ = id => document.getElementById(id);
+const shopListEl = $('shop-list');
+const pantryListEl = $('pantry-list');
+const moveBtn = $('move-done');
+const toastEl = $('toast');
+let toastTimer = null;
+
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
+}
+
+for (const sel of [$('shop-category'), $('pantry-category')]) {
+  for (const c of CATEGORIES) {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.icon + ' ' + c.label;
+    sel.appendChild(o);
+  }
+}
+
+$('shop-sale').addEventListener('change', e => {
+  $('shop-sale-price').hidden = !e.target.checked;
+});
+
+function findPantry(name, category) {
+  // 同名なら同一物品として扱う(追加時のカテゴリ選択が在庫と違っても紐付ける)
+  return state.pantry.find(i => i.name === name && i.category === category)
+    || state.pantry.find(i => i.name === name);
+}
+
+function addToShopping(name, category, qty, sale, salePrice, noStock) {
+  const existing = state.shopping.find(i => !i.done && i.name === name && i.category === category && i.sale === sale && !!i.noStock === !!noStock);
+  if (existing) {
+    existing.qty = Math.min(99, existing.qty + qty);
+    return;
+  }
+  const p = noStock ? null : findPantry(name, category);
+  const item = {
+    id: uid(), name, category, qty,
+    done: false, sale,
+    salePrice: sale ? salePrice : null,
+    pantryId: p ? p.id : null,
+    noStock: !!noStock
+  };
+  // 新規はカテゴリ順の位置に挿入(初期状態は売り場順)。手動での並べ替えは保持される
+  const rank = CAT_RANK[category];
+  const idx = state.shopping.findIndex(i => CAT_RANK[i.category] > rank);
+  if (idx === -1) state.shopping.push(item);
+  else state.shopping.splice(idx, 0, item);
+}
+
+function addToPantry(name, category, qty, usualPrice) {
+  const existing = findPantry(name, category);
+  if (existing) {
+    existing.qty = Math.min(99, existing.qty + qty);
+    if (usualPrice != null) existing.usualPrice = usualPrice;
+  } else {
+    state.pantry.push({ id: uid(), name, qty, category, usualPrice: usualPrice != null ? usualPrice : null });
+  }
+}
+
+$('shop-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const nameEl = $('shop-name'), qtyEl = $('shop-qty'), catEl = $('shop-category');
+  const saleEl = $('shop-sale'), priceEl = $('shop-sale-price'), noStockEl = $('shop-nostock');
+  const name = nameEl.value.trim();
+  if (!name) return;
+  const qty = clampQty(parseInt(qtyEl.value, 10) || 1);
+  const sale = saleEl.checked;
+  let salePrice = null;
+  if (sale) {
+    salePrice = parseInt(priceEl.value, 10);
+    if (!salePrice || salePrice < 1) {
+      toast('特売価格を入力してください');
+      priceEl.focus();
+      return;
+    }
+    salePrice = Math.min(99999, salePrice);
+  }
+  addToShopping(name, catEl.value, qty, sale, salePrice, noStockEl.checked);
+  save(); render();
+  nameEl.value = ''; qtyEl.value = '1'; priceEl.value = '';
+  saleEl.checked = false; priceEl.hidden = true; noStockEl.checked = false;
+  nameEl.focus();
+  toast('「' + name + '」を買い物リストに追加しました');
+});
+
+$('pantry-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const nameEl = $('pantry-name'), qtyEl = $('pantry-qty'), catEl = $('pantry-category'), priceEl = $('pantry-price');
+  const name = nameEl.value.trim();
+  if (!name) return;
+  const qty = clampQty(parseInt(qtyEl.value, 10) || 1);
+  const price = parseInt(priceEl.value, 10);
+  addToPantry(name, catEl.value, qty, price >= 1 ? Math.min(99999, price) : null);
+  save(); render();
+  nameEl.value = ''; qtyEl.value = '1'; priceEl.value = '';
+  nameEl.focus();
+  toast('「' + name + '」を在庫に追加しました');
+});
+
+shopListEl.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const item = state.shopping.find(i => i.id === el.dataset.id);
+  if (!item) return;
+  const action = el.dataset.action;
+  if (action === 'toggle') {
+    item.done = el.checked;
+  } else if (action === 'inc') {
+    item.qty = Math.min(99, item.qty + 1);
+  } else if (action === 'dec') {
+    item.qty = Math.max(1, item.qty - 1);
+  } else if (action === 'up' || action === 'down') {
+    const idx = state.shopping.findIndex(i => i.id === item.id);
+    const j = action === 'up' ? idx - 1 : idx + 1;
+    if (j >= 0 && j < state.shopping.length) {
+      const tmp = state.shopping[idx];
+      state.shopping[idx] = state.shopping[j];
+      state.shopping[j] = tmp;
+    }
+  } else if (action === 'del') {
+    state.shopping = state.shopping.filter(i => i.id !== item.id);
+    toast('削除しました');
+  }
+  save(); render();
+});
+
+pantryListEl.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const item = state.pantry.find(i => i.id === el.dataset.id);
+  if (!item) return;
+  const action = el.dataset.action;
+  // 価格入力はchange側で処理。ここで再描画すると入力欄が作り直されフォーカスが失われる
+  if (action === 'price') return;
+  if (action === 'inc') {
+    item.qty = Math.min(99, item.qty + 1);
+  } else if (action === 'dec') {
+    item.qty = Math.max(0, item.qty - 1);
+  } else if (action === 'del') {
+    state.pantry = state.pantry.filter(i => i.id !== item.id);
+    toast('削除しました');
+  } else if (action === 'tolist') {
+    addToShopping(item.name, item.category, 1, false, null, false);
+    toast('「' + item.name + '」を買い物リストに追加しました');
+  }
+  save(); render();
+});
+
+pantryListEl.addEventListener('change', e => {
+  const el = e.target.closest('[data-action="price"]');
+  if (!el) return;
+  const item = state.pantry.find(i => i.id === el.dataset.id);
+  if (!item) return;
+  const v = parseInt(el.value, 10);
+  item.usualPrice = v >= 1 ? Math.min(99999, v) : null;
+  save(); render();
+});
+
+moveBtn.addEventListener('click', () => {
+  const done = state.shopping.filter(i => i.done);
+  if (!done.length) return;
+  let toPantry = 0;
+  for (const d of done) {
+    if (d.noStock) continue;
+    const p = d.pantryId ? state.pantry.find(i => i.id === d.pantryId) : null;
+    if (p) {
+      p.qty = Math.min(99, p.qty + d.qty);
+    } else {
+      state.pantry.push({ id: uid(), name: d.name, category: d.category, qty: d.qty, usualPrice: null });
+    }
+    toPantry++;
+  }
+  state.shopping = state.shopping.filter(i => !i.done);
+  save(); render();
+  toast(done.length + '件を確定(在庫に反映 ' + toPantry + '件)');
+});
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+    $('panel-shop').classList.toggle('hidden', tab.dataset.tab !== 'shop');
+    $('panel-pantry').classList.toggle('hidden', tab.dataset.tab !== 'pantry');
+  });
+});
+
+function makeChip(category) {
+  const c = CAT_MAP[category] || CAT_MAP.other;
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  chip.textContent = c.icon + ' ' + c.label;
+  return chip;
+}
+
+function makeDeleteBtn(id) {
+  const btn = document.createElement('button');
+  btn.className = 'icon-btn';
+  btn.dataset.action = 'del';
+  btn.dataset.id = id;
+  btn.title = '削除';
+  btn.textContent = '✕';
+  return btn;
+}
+
+function makeStepper(item) {
+  const stepper = document.createElement('div');
+  stepper.className = 'stepper';
+  const dec = document.createElement('button');
+  dec.dataset.action = 'dec';
+  dec.dataset.id = item.id;
+  dec.title = '1つ減らす';
+  dec.textContent = '−';
+  const num = document.createElement('span');
+  num.className = 'num';
+  num.textContent = item.qty;
+  const inc = document.createElement('button');
+  inc.dataset.action = 'inc';
+  inc.dataset.id = item.id;
+  inc.title = '1つ増やす';
+  inc.textContent = '+';
+  stepper.appendChild(dec);
+  stepper.appendChild(num);
+  stepper.appendChild(inc);
+  return stepper;
+}
+
+function makeMover(item, idx, total) {
+  const mover = document.createElement('div');
+  mover.className = 'mover';
+  const up = document.createElement('button');
+  up.dataset.action = 'up';
+  up.dataset.id = item.id;
+  up.title = '上へ移動';
+  up.textContent = '↑';
+  up.disabled = idx === 0;
+  const down = document.createElement('button');
+  down.dataset.action = 'down';
+  down.dataset.id = item.id;
+  down.title = '下へ移動';
+  down.textContent = '↓';
+  down.disabled = idx === total - 1;
+  mover.appendChild(up);
+  mover.appendChild(down);
+  return mover;
+}
+
+function makePriceLine(item) {
+  const p = item.pantryId ? state.pantry.find(i => i.id === item.pantryId) : null;
+  const line = document.createElement('div');
+  line.className = 'price-line';
+  if (item.sale) {
+    const sale = document.createElement('span');
+    sale.className = 'price-sale';
+    sale.textContent = fmtYen(item.salePrice);
+    line.appendChild(sale);
+    if (p && p.usualPrice != null) {
+      const usual = document.createElement('span');
+      usual.className = 'price-usual';
+      usual.textContent = '通常 ' + fmtYen(p.usualPrice);
+      line.appendChild(usual);
+    }
+  } else if (p && p.usualPrice != null) {
+    const usual = document.createElement('span');
+    usual.className = 'price-usual';
+    usual.textContent = '通常 ' + fmtYen(p.usualPrice);
+    line.appendChild(usual);
+  }
+  return line.childNodes.length ? line : null;
+}
+
+function shopRow(item, idx, total) {
+  const row = document.createElement('div');
+  row.className = 'item' + (item.done ? ' done' : '') + (item.sale ? ' sale' : '') + (item.noStock ? ' nostock' : '');
+
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.className = 'check';
+  check.checked = item.done;
+  check.dataset.action = 'toggle';
+  check.dataset.id = item.id;
+  check.title = 'カートに入れたチェック';
+
+  const main = document.createElement('div');
+  main.className = 'item-main';
+  const name = document.createElement('span');
+  name.className = 'item-name';
+  name.textContent = item.name;
+  main.appendChild(name);
+  main.appendChild(makeChip(item.category));
+  if (item.sale) {
+    const badge = document.createElement('span');
+    badge.className = 'badge-sale';
+    badge.textContent = '特売';
+    main.appendChild(badge);
+  }
+  if (item.noStock) {
+    const badge = document.createElement('span');
+    badge.className = 'badge-nostock';
+    badge.textContent = '非保存';
+    main.appendChild(badge);
+  }
+  const priceLine = makePriceLine(item);
+  if (priceLine) main.appendChild(priceLine);
+
+  row.appendChild(check);
+  row.appendChild(main);
+  row.appendChild(makeStepper(item));
+  row.appendChild(makeMover(item, idx, total));
+  row.appendChild(makeDeleteBtn(item.id));
+  return row;
+}
+
+function pantryRow(item) {
+  const row = document.createElement('div');
+  row.className = 'item' + (item.qty === 0 ? ' out' : '');
+
+  const main = document.createElement('div');
+  main.className = 'item-main';
+  const name = document.createElement('span');
+  name.className = 'item-name';
+  name.textContent = item.name;
+  main.appendChild(name);
+  main.appendChild(makeChip(item.category));
+  if (item.qty === 0) {
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = '在庫切れ';
+    main.appendChild(badge);
+  }
+
+  const price = document.createElement('input');
+  price.type = 'number';
+  price.className = 'price-input';
+  price.min = '1';
+  price.max = '99999';
+  price.placeholder = '通常価格';
+  price.title = '通常価格(円)';
+  price.dataset.action = 'price';
+  price.dataset.id = item.id;
+  if (item.usualPrice != null) price.value = item.usualPrice;
+
+  const toList = document.createElement('button');
+  toList.className = 'btn-small';
+  toList.dataset.action = 'tolist';
+  toList.dataset.id = item.id;
+  toList.textContent = '🛒 リストへ';
+
+  row.appendChild(main);
+  row.appendChild(makeStepper(item));
+  row.appendChild(price);
+  row.appendChild(toList);
+  row.appendChild(makeDeleteBtn(item.id));
+  return row;
+}
+
+function renderShop() {
+  shopListEl.textContent = '';
+  if (!state.shopping.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'リストは空です。在庫の「リストへ」か、上のフォームから追加しましょう。';
+    shopListEl.appendChild(empty);
+    return;
+  }
+  state.shopping.forEach((item, idx) => {
+    shopListEl.appendChild(shopRow(item, idx, state.shopping.length));
+  });
+}
+
+function renderPantry() {
+  pantryListEl.textContent = '';
+  if (!state.pantry.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = '在庫は空です。よく買うものを登録しておくと便利です。';
+    pantryListEl.appendChild(empty);
+    return;
+  }
+  for (const c of CATEGORIES) {
+    const group = state.pantry.filter(i => i.category === c.id);
+    if (!group.length) continue;
+    const header = document.createElement('div');
+    header.className = 'group-header';
+    header.textContent = c.icon + ' ' + c.label;
+    pantryListEl.appendChild(header);
+    for (const item of group) pantryListEl.appendChild(pantryRow(item));
+  }
+}
+
+function render() {
+  renderShop();
+  renderPantry();
+
+  const remaining = state.shopping.filter(i => !i.done).length;
+  $('shop-count').textContent = remaining;
+  $('pantry-count').textContent = state.pantry.length;
+  $('shop-remaining').textContent = state.shopping.length
+    ? '未購入 ' + remaining + '件 / 全' + state.shopping.length + '件'
+    : '';
+  moveBtn.disabled = !state.shopping.some(i => i.done);
+}
+
+render();
+</script>
+</body>
+</html>
